@@ -1,0 +1,15 @@
+{
+  "name": "auracare-consultation",
+  "version": "1.0.0",
+  "description": "Premium video consultation website for medical startups using LiveKit",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "livekit-server-sdk": "^2.3.0"
+  }
+}
