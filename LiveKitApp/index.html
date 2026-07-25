@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>LiveKit Video Call</title>
+    <script src="https://cdn.jsdelivr.net/npm/livekit-client@2.7.3/dist/livekit-client.umd.min.js"></script>
+    <style>
+        body { font-family: sans-serif; text-align: center; background: #121212; color: white; margin: 0; padding: 20px; }
+        #video-grid { display: flex; gap: 20px; justify-content: center; margin-top: 40px; }
+        video { width: 45%; max-width: 500px; height: 350px; background: #222; border-radius: 12px; transform: scaleX(-1); object-fit: cover; }
+        #status { color: #aaa; font-style: italic; margin-top: 10px; }
+    </style>
+</head>
+<body>
+
+    <h1 id="room-title">Joining Call...</h1>
+    <p id="status">Connecting to network layers...</p>
+    
+    <div id="video-grid">
+        <div>
+            <h3>You</h3>
+            <video id="local-video" autoplay playsinline muted></video>
+        </div>
+        <div>
+            <h3>Remote Peer</h3>
+            <video id="remote-video" autoplay playsinline></video>
+        </div>
+    </div>
+
+    <script>
+        // Automatically run when the page loads
+        window.addEventListener('DOMContentLoaded', async () => {
+            // Read URL parameters (?room=xxx&token=yyy)
+            const urlParams = new URLSearchParams(window.location.search);
+            const roomName = urlParams.get('room');
+            const token = urlParams.get('token');
+
+            if (!roomName || !token) {
+                document.getElementById('status').innerText = "Error: Invalid link parameters.";
+                return;
+            }
+
+            document.getElementById('room-title').innerText = `Room: ${roomName}`;
+            
+            const serverUrl = `ws://${window.location.hostname}:7880`;
+            const room = new LivekitClient.Room();
+ 
+            // Handle incoming video from your friend
+            room.on(LivekitClient.RoomEvent.TrackSubscribed, (track) => {
+                if (track.kind === LivekitClient.Track.Kind.Video) {
+                    track.attach(document.getElementById('remote-video'));
+                    document.getElementById('status').innerText = "Connected to Peer!";
+                }
+            });
+
+            // Step 1: Connect to LiveKit room (fatal — show error if this fails)
+            try {
+                await room.connect(serverUrl, token);
+                document.getElementById('status').innerText = "✅ Connected to room! Enabling camera...";
+            } catch (error) {
+                console.error('Room connection failed:', error);
+                document.getElementById('status').innerText = "Connection failed: " + error.message;
+                return;
+            }
+
+            // Step 2: Enable camera & mic (non-fatal — show warning but stay in room)
+            try {
+                await room.localParticipant.enableCameraAndMicrophone();
+
+                // Show your own stream locally
+                const localVideoTrack = room.localParticipant.getTrackPublication(LivekitClient.Track.Source.Camera)?.videoTrack;
+                if (localVideoTrack) {
+                    localVideoTrack.attach(document.getElementById('local-video'));
+                }
+
+                document.getElementById('status').innerText = "Waiting for peer to join...";
+            } catch (error) {
+                console.warn('Camera/mic error (non-fatal):', error);
+                document.getElementById('status').innerText = "⚠️ Camera unavailable — audio-only mode. Waiting for peer...";
+            }
+        });
+    </script>
+</body>
+</html>

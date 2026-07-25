@@ -32,6 +32,7 @@ class _VirtualWaitingRoomState extends State<VirtualWaitingRoom> {
   final _roomController = TextEditingController(text: 'my-consultation-room');
   final _nameController = TextEditingController(text: 'Dr. Amanulla Belg');
   final _serverUrlController = TextEditingController(text: '');
+  final _meetingDescriptionController = TextEditingController();
   
   // Custom API key/secret inputs (remain in code to prevent compilation errors but hidden from UI)
   final _apiKeyController = TextEditingController(text: '');
@@ -154,6 +155,7 @@ class _VirtualWaitingRoomState extends State<VirtualWaitingRoom> {
   void dispose() {
     _roomController.dispose();
     _nameController.dispose();
+    _meetingDescriptionController.dispose();
     _serverUrlController.dispose();
     _apiKeyController.dispose();
     _apiSecretController.dispose();
@@ -511,6 +513,36 @@ class _VirtualWaitingRoomState extends State<VirtualWaitingRoom> {
               decoration: InputDecoration(
                 prefixIcon: const Icon(Icons.person_outline, color: Colors.white30),
                 hintText: 'Enter your name',
+                hintStyle: const TextStyle(color: Colors.white30),
+                filled: true,
+                fillColor: const Color(0xFF0F172A),
+                contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: isSmall ? 10 : 14),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide.none,
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: const BorderSide(color: Colors.indigoAccent, width: 2),
+                ),
+              ),
+            ),
+            SizedBox(height: isSmall ? 14 : 20),
+
+            // Meeting Description Field
+            const Text(
+              'Meeting Description',
+              style: TextStyle(fontSize: 12, color: Colors.white60, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: _meetingDescriptionController,
+              minLines: 3,
+              maxLines: 4,
+              style: const TextStyle(color: Colors.white),
+              decoration: InputDecoration(
+                prefixIcon: const Icon(Icons.description_outlined, color: Colors.white30),
+                hintText: 'Enter consultation details...',
                 hintStyle: const TextStyle(color: Colors.white30),
                 filled: true,
                 fillColor: const Color(0xFF0F172A),
