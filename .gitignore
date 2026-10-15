@@ -32,6 +32,9 @@ migrate_working_dir/
 .pub/
 /build/
 /coverage/
+/flutter/
+**/node_modules/
+
 
 # Symbolication related
 app.*.symbols

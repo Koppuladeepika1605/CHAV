@@ -2,31 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'consultation_room.dart';
 import 'clinical_panel.dart';
+import 'whiteboard.dart';
+import '../shared_state.dart';
 
 class ConsultationView extends StatefulWidget {
-  final String url;
-  final String token;
-  final String room;
-  final String apiKey;
-  final String apiSecret;
-  final bool initialVideoOn;
-  final bool initialAudioOn;
-  final String publicUrl;
-  final bool isDoctor;
-  
-  const ConsultationView({
-    super.key,
-    required this.url,
-    required this.token,
-    this.room = '',
-    this.apiKey = '',
-    this.apiSecret = '',
-    this.initialVideoOn = true,
-    this.initialAudioOn = true,
-    this.publicUrl = '',
-    this.isDoctor = false, // Initialize it here
-  });
+  final String? url;
+  final String? token;
+  final String? room;
 
+  const ConsultationView({super.key, this.url, this.token, this.room});
 
   @override
   State<ConsultationView> createState() => _ConsultationViewState();
@@ -34,6 +18,28 @@ class ConsultationView extends StatefulWidget {
 
 class _ConsultationViewState extends State<ConsultationView> {
   String viewMode = 'split'; // 'split', 'form', 'video'
+  final GlobalKey _videoKey = GlobalKey();
+  
+  double? _pipX;
+  double? _pipY;
+  bool _isPipMinimized = false;
+  bool _isVideoOverlayVisible = true;
+
+  @override
+  void initState() {
+    super.initState();
+    MeetingController().addListener(_onUpdate);
+  }
+
+  void _onUpdate() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void dispose() {
+    MeetingController().removeListener(_onUpdate);
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -41,9 +47,13 @@ class _ConsultationViewState extends State<ConsultationView> {
       builder: (context, constraints) {
         final screenWidth = constraints.maxWidth;
         final screenHeight = constraints.maxHeight;
-        final isNarrow = screenWidth < 900;
 
-        // Calculate positions and sizes based on viewMode
+        // Initialize PiP coordinates
+        if (_pipX == null || _pipY == null) {
+          _pipX = screenWidth - 340;
+          _pipY = 32;
+        }
+
         double videoLeft = 16;
         double videoTop = 16;
         double videoWidth = 0;
@@ -56,70 +66,190 @@ class _ConsultationViewState extends State<ConsultationView> {
         
         bool isVideoPip = false;
         bool isFormPip = false;
+        bool isWhiteboardOpen = MeetingController().isWhiteboardOpen;
 
-        if (viewMode == 'split') {
-          if (isNarrow) {
-            // Stack vertically: video on top, form on bottom
-            videoWidth = screenWidth - 32;
-            videoHeight = (screenHeight * 0.38) - 16;
-            videoLeft = 16;
-            videoTop = 16;
-
-            formLeft = 16;
-            formTop = (screenHeight * 0.38) + 12;
-            formWidth = screenWidth - 32;
-            formHeight = (screenHeight * 0.62) - 28;
-          } else {
-            // Side by side split
+        if (isWhiteboardOpen) {
+          isVideoPip = true;
+          isFormPip = true;
+        } else {
+          if (viewMode == 'split') {
             videoWidth = (screenWidth * 0.72) - 24;
             videoHeight = screenHeight - 32;
-            videoLeft = 16;
-            videoTop = 16;
-
             formLeft = (screenWidth * 0.72) + 8;
             formWidth = (screenWidth * 0.28) - 24;
             formHeight = screenHeight - 32;
-          }
-        } else if (viewMode == 'form') {
-          formLeft = 16;
-          formWidth = screenWidth - 32;
-          formHeight = screenHeight - 32;
-          
-          if (isNarrow) {
-            videoWidth = (screenWidth * 0.45).clamp(140.0, 240.0);
-            videoHeight = videoWidth * 0.75;
-            videoLeft = screenWidth - videoWidth - 16;
-            videoTop = screenHeight - videoHeight - 16;
-          } else {
+          } else if (viewMode == 'form') {
+            formLeft = 16;
+            formWidth = screenWidth - 32;
+            formHeight = screenHeight - 32;
+            
             videoWidth = 400;
             videoHeight = 280;
             videoLeft = screenWidth - videoWidth - 32;
             videoTop = screenHeight - videoHeight - 32;
-          }
-          isVideoPip = true;
-        } else if (viewMode == 'video') {
-          videoWidth = screenWidth - 32;
-          videoHeight = screenHeight - 32;
-          videoLeft = 16;
-          videoTop = 16;
-          
-          if (isNarrow) {
-            formWidth = (screenWidth * 0.35).clamp(110.0, 160.0);
-            formHeight = formWidth * 0.68;
-            formLeft = screenWidth - formWidth - 16;
-            formTop = screenHeight - formHeight - 16;
-          } else {
+            isVideoPip = true;
+          } else if (viewMode == 'video') {
+            videoWidth = screenWidth - 32;
+            videoHeight = screenHeight - 32;
+            
             formWidth = 240;
             formHeight = 160;
             formLeft = screenWidth - formWidth - 32;
             formTop = screenHeight - formHeight - 32;
+            isFormPip = true;
           }
-          isFormPip = true;
         }
 
-        return Stack(
-          children: [
-            // Video Background/Pane
+        // 1. Build the Video Pane
+        Widget videoPane = AnimatedContainer(
+          duration: 500.ms,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: isVideoPip && !isWhiteboardOpen ? [const BoxShadow(color: Colors.black54, blurRadius: 20)] : [],
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: ConsultationRoom(
+            key: _videoKey,
+            url: widget.url,
+            token: widget.token,
+            roomName: widget.room,
+            isPip: isVideoPip, 
+            onExpand: () {
+              if (isWhiteboardOpen) {
+                MeetingController().toggleWhiteboardState(false);
+              } else {
+                setState(() => viewMode = 'video');
+              }
+            },
+            onWhiteboardToggle: () {
+              final nextState = !MeetingController().isWhiteboardOpen;
+              if (nextState) {
+                setState(() {
+                  _isVideoOverlayVisible = true;
+                  _isPipMinimized = false;
+                });
+              }
+              MeetingController().toggleWhiteboardState(nextState);
+            },
+          ),
+        );
+
+        // 2. Build the Form Pane
+        Widget formPane = AnimatedContainer(
+          duration: 500.ms,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: isFormPip ? [const BoxShadow(color: Colors.black54, blurRadius: 20)] : [],
+            color: isFormPip ? const Color(0xFF1E293B) : Colors.transparent,
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: isFormPip 
+            ? _buildMinimizedForm() 
+            : const ClinicalPanel(),
+        );
+
+        final List<Widget> stackChildren = [];
+
+        if (isWhiteboardOpen) {
+          // Whiteboard mode layout
+          stackChildren.add(
+            Positioned(
+              left: 16,
+              top: 16,
+              width: screenWidth - 32,
+              height: screenHeight - 32,
+              child: WhiteboardWidget(
+                onClose: () {
+                  MeetingController().toggleWhiteboardState(false);
+                },
+              ).animate().fadeIn(duration: 300.ms).scale(begin: const Offset(0.95, 0.95)),
+            ),
+          );
+
+          // Hide form pane mostly, keep it accessible if needed
+          stackChildren.add(
+            AnimatedPositioned(
+              duration: 500.ms,
+              curve: Curves.easeInOutCubic,
+              left: 32,
+              bottom: 32,
+              width: 140,
+              height: 100,
+              child: formPane,
+            ),
+          );
+
+          // Floating Draggable Video Overlay
+          if (_isVideoOverlayVisible) {
+            double overlayWidth = _isPipMinimized ? 240 : 340;
+            double overlayHeight = _isPipMinimized ? 36 : 280;
+
+            stackChildren.add(
+              Positioned(
+                left: _pipX,
+                top: _pipY,
+                width: overlayWidth,
+                height: overlayHeight,
+                child: GestureDetector(
+                  onPanUpdate: (details) {
+                    setState(() {
+                      _pipX = (_pipX! + details.delta.dx).clamp(0.0, screenWidth - overlayWidth);
+                      _pipY = (_pipY! + details.delta.dy).clamp(0.0, screenHeight - overlayHeight);
+                    });
+                  },
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF1E293B),
+                      borderRadius: BorderRadius.circular(16),
+                      boxShadow: const [BoxShadow(color: Colors.black54, blurRadius: 24, spreadRadius: 2)],
+                      border: Border.all(color: Colors.white24, width: 1),
+                    ),
+                    clipBehavior: Clip.antiAlias,
+                    child: Column(
+                      children: [
+                        // Drag Handle Header
+                        Container(
+                          height: 36,
+                          color: const Color(0xFF0F172A),
+                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.drag_indicator, color: Colors.white38, size: 16),
+                              const SizedBox(width: 8),
+                              const Text('Meeting', style: TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.bold)),
+                              const Spacer(),
+                              GestureDetector(
+                                onTap: () => setState(() => _isPipMinimized = !_isPipMinimized),
+                                child: Icon(_isPipMinimized ? Icons.unfold_more : Icons.minimize, color: Colors.white54, size: 16),
+                              ),
+                              const SizedBox(width: 12),
+                              GestureDetector(
+                                onTap: () => MeetingController().toggleWhiteboardState(false),
+                                child: const Icon(Icons.open_in_full, color: Colors.white54, size: 14),
+                              ),
+                              const SizedBox(width: 12),
+                              GestureDetector(
+                                onTap: () => setState(() => _isVideoOverlayVisible = false),
+                                child: const Icon(Icons.close, color: Colors.white54, size: 18),
+                              ),
+                            ],
+                          ),
+                        ),
+                        // Video Area
+                        if (!_isPipMinimized)
+                          Expanded(
+                            child: videoPane,
+                          ),
+                      ],
+                    ),
+                  ).animate().scaleXY(begin: 0.9, duration: 200.ms, curve: Curves.easeOutCubic).fadeIn(),
+                ),
+              ),
+            );
+          }
+        } else {
+          // Normal view mode layout
+          stackChildren.add(
             AnimatedPositioned(
               duration: 500.ms,
               curve: Curves.easeInOutCubic,
@@ -127,30 +257,11 @@ class _ConsultationViewState extends State<ConsultationView> {
               top: videoTop,
               width: videoWidth,
               height: videoHeight,
-              child: AnimatedContainer(
-                duration: 500.ms,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(16),
-                  boxShadow: isVideoPip ? [const BoxShadow(color: Colors.black54, blurRadius: 20)] : [],
-                ),
-                clipBehavior: Clip.antiAlias,
-                child: ConsultationRoom(
-                  url: widget.url,
-                  token: widget.token,
-                  roomName: widget.room,
-                  apiKey: widget.apiKey,
-                  apiSecret: widget.apiSecret,
-                  initialVideoOn: widget.initialVideoOn,
-                  initialAudioOn: widget.initialAudioOn,
-                  publicUrl: widget.publicUrl,
-                  isPip: isVideoPip,
-                  onExpand: () => setState(() => viewMode = 'video'),
-                  isDoctor: widget.isDoctor,
-                ),
-              ),
+              child: videoPane,
             ),
+          );
 
-            // Form Background/Pane
+          stackChildren.add(
             AnimatedPositioned(
               duration: 500.ms,
               curve: Curves.easeInOutCubic,
@@ -158,43 +269,38 @@ class _ConsultationViewState extends State<ConsultationView> {
               top: formTop,
               width: formWidth,
               height: formHeight,
-              child: AnimatedContainer(
-                duration: 500.ms,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(16),
-                  boxShadow: isFormPip ? [const BoxShadow(color: Colors.black54, blurRadius: 20)] : [],
-                  color: isFormPip ? const Color(0xFF1E293B) : Colors.transparent,
-                ),
-                clipBehavior: Clip.antiAlias,
-                child: isFormPip 
-                  ? _buildMinimizedForm() 
-                  : const ClinicalPanel(),
-              ),
+              child: formPane,
             ),
+          );
 
-            // Toggle Bar (Top Left)
+          // Toggle Bar
+          stackChildren.add(
             Positioned(
-              top: isNarrow ? 12 : 24,
-              left: isNarrow ? 12 : 24,
+              top: 24,
+              left: 24,
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                padding: const EdgeInsets.all(4),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF1E293B).withOpacity(0.9),
-                  borderRadius: BorderRadius.circular(30),
+                  color: const Color(0xFF141D2E).withOpacity(0.9),
+                  borderRadius: BorderRadius.circular(14),
                   border: Border.all(color: Colors.white12),
-                  boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 10)],
+                  boxShadow: const [BoxShadow(color: Colors.black38, blurRadius: 12)],
                 ),
                 child: Row(
                   children: [
-                    _buildToggleBtn(Icons.view_sidebar_outlined, 'split'),
-                    _buildToggleBtn(Icons.description_outlined, 'form'),
+                    _buildToggleBtn(Icons.grid_view_rounded, 'split'),
+                    const SizedBox(width: 4),
+                    _buildToggleBtn(Icons.article_outlined, 'form'),
+                    const SizedBox(width: 4),
                     _buildToggleBtn(Icons.videocam_outlined, 'video'),
                   ],
                 ),
               ).animate().slideY(begin: -1, duration: 600.ms, curve: Curves.easeOutCubic),
             ),
-          ],
-        );
+          );
+        }
+
+        return Stack(children: stackChildren);
       },
     );
   }
@@ -204,20 +310,27 @@ class _ConsultationViewState extends State<ConsultationView> {
     return GestureDetector(
       onTap: () => setState(() => viewMode = mode),
       child: AnimatedContainer(
-        duration: 300.ms,
-        padding: const EdgeInsets.all(10),
+        duration: 200.ms,
+        padding: const EdgeInsets.all(8),
         decoration: BoxDecoration(
-          color: isActive ? Colors.indigoAccent : Colors.transparent,
-          shape: BoxShape.circle,
+          color: isActive ? const Color(0xFF3B82F6) : Colors.transparent,
+          borderRadius: BorderRadius.circular(10),
         ),
-        child: Icon(icon, color: isActive ? Colors.white : Colors.white54, size: 18),
+        child: Icon(icon, color: isActive ? Colors.white : Colors.white60, size: 18),
       ),
     );
   }
 
   Widget _buildMinimizedForm() {
     return GestureDetector(
-      onTap: () => setState(() => viewMode = 'form'),
+      onTap: () {
+        if (MeetingController().isWhiteboardOpen) {
+           MeetingController().toggleWhiteboardState(false);
+           setState(() => viewMode = 'form');
+        } else {
+           setState(() => viewMode = 'form');
+        }
+      },
       child: Stack(
         children: [
           const Center(
@@ -235,7 +348,7 @@ class _ConsultationViewState extends State<ConsultationView> {
             right: 12,
             child: Container(
               padding: const EdgeInsets.all(4),
-              decoration: BoxDecoration(color: Colors.black45, shape: BoxShape.circle),
+              decoration: const BoxDecoration(color: Colors.black45, shape: BoxShape.circle),
               child: const Icon(Icons.open_in_full, size: 14, color: Colors.white),
             ),
           )
@@ -244,3 +357,4 @@ class _ConsultationViewState extends State<ConsultationView> {
     );
   }
 }
+

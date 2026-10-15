@@ -1,11 +1,47 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'components/role_selection.dart';
 import 'components/virtual_waiting_room.dart';
 import 'components/consultation_view.dart';
-import 'components/dashboard_layout.dart';
+import 'shared_state.dart';
+import 'config.dart';
 
-void main() {
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  await Supabase.initialize(
+    url: SupabaseConfig.url,
+    publishableKey: SupabaseConfig.publishableKey,
+  );
+
   runApp(const ChavApp());
+}
+
+// Custom page transition — fade + slight slide up
+CustomTransitionPage<T> _fadePage<T>({
+  required BuildContext context,
+  required GoRouterState state,
+  required Widget child,
+}) {
+  return CustomTransitionPage<T>(
+    key: state.pageKey,
+    child: child,
+    transitionDuration: const Duration(milliseconds: 380),
+    reverseTransitionDuration: const Duration(milliseconds: 250),
+    transitionsBuilder: (context, animation, secondaryAnimation, child) {
+      final fade =
+          CurvedAnimation(parent: animation, curve: Curves.easeOutCubic);
+      final slideAnim = Tween<Offset>(
+        begin: const Offset(0, 0.04),
+        end: Offset.zero,
+      ).animate(fade);
+      return FadeTransition(
+        opacity: fade,
+        child: SlideTransition(position: slideAnim, child: child),
+      );
+    },
+  );
 }
 
 final GoRouter _router = GoRouter(
@@ -14,49 +50,70 @@ final GoRouter _router = GoRouter(
     GoRoute(
       path: '/',
       builder: (context, state) {
-        final qp = state.uri.queryParameters;
-        return DashboardLayout(
-          child: VirtualWaitingRoom(
-            initialRoom: qp['room'],
-            initialUrl: qp['url'],
-            initialKey: qp['key'],
-            initialSecret: qp['secret'],
+        return const RoleSelection();
+      },
+    ),
+    GoRoute(
+      path: '/doctor',
+      builder: (context, state) {
+        return Scaffold(
+          backgroundColor: const Color(0xFF0F172A),
+          body: VirtualWaitingRoom(
+            initialRoom: state.uri.queryParameters['room'],
+            initialUrl: state.uri.queryParameters['url'],
+            initialKey: state.uri.queryParameters['apiKey'],
+            initialSecret: state.uri.queryParameters['apiSecret'],
+            initialDesc: state.uri.queryParameters['desc'],
+            isDoctor: true,
           ),
         );
       },
     ),
-        GoRoute(
-      path: '/consultation',
+    GoRoute(
+      path: '/patient',
       builder: (context, state) {
-        final qp = state.uri.queryParameters;
-        final extra = state.extra as Map<String, dynamic>? ?? {};
-        
-        final url = qp['url'] ?? extra['url'] ?? 'ws://localhost:7880';
-        final token = qp['token'] ?? extra['token'] ?? '';
-        final room = qp['room'] ?? extra['room'] ?? '';
-        final apiKey = qp['apiKey'] ?? extra['apiKey'] ?? '';
-        final apiSecret = qp['apiSecret'] ?? extra['apiSecret'] ?? '';
-        final initialVideoOn = qp['initialVideoOn'] ?? extra['initialVideoOn'] ?? 'true';
-        final initialAudioOn = qp['initialAudioOn'] ?? extra['initialAudioOn'] ?? 'true';
-        final publicUrl = qp['publicUrl'] ?? extra['publicUrl'] ?? '';
-        final isDoctor = (qp['isDoctor'] ?? extra['isDoctor'] ?? 'false') == 'true';
-        
-        return DashboardLayout(
-          child: ConsultationView(
-            url: url,
-            token: token,
-            room: room,
-            apiKey: apiKey,
-            apiSecret: apiSecret,
-            initialVideoOn: initialVideoOn == 'true',
-            initialAudioOn: initialAudioOn == 'true',
-            publicUrl: publicUrl,
-            isDoctor: isDoctor,
+        return Scaffold(
+          backgroundColor: const Color(0xFF0F172A),
+          body: VirtualWaitingRoom(
+            initialRoom: state.uri.queryParameters['room'],
+            initialUrl: state.uri.queryParameters['url'],
+            initialKey: state.uri.queryParameters['apiKey'],
+            initialSecret: state.uri.queryParameters['apiSecret'],
+            initialDesc: state.uri.queryParameters['desc'],
+            isDoctor: false,
           ),
         );
       },
-     ),
+    ),
+    GoRoute(
+      path: '/consultation',
+      pageBuilder: (context, state) {
+        final url = state.uri.queryParameters['url'];
+        final token = state.uri.queryParameters['token'];
+        final isDoctorStr = state.uri.queryParameters['isDoctor'];
+        final desc = state.uri.queryParameters['desc'];
+        debugPrint('ROUTER PARSED isDoctor: $isDoctorStr from URI: ${state.uri}');
+        final isDoctor = isDoctorStr == 'true';
+        
+        final room = state.uri.queryParameters['room'];
+        
+        // Setup the meeting controller for our new architecture
+        MeetingController().setRoleAndSummary(isDoctor: isDoctor, meetingDescriptionText: desc);
 
+        return _fadePage(
+          context: context,
+          state: state,
+          child: Scaffold(
+            backgroundColor: const Color(0xFF0F172A),
+            body: ConsultationView(
+              url: url,
+              token: token,
+              room: room ?? 'my-consultation-room',
+            ),
+          ),
+        );
+      },
+    ),
   ],
 );
 
@@ -67,12 +124,22 @@ class ChavApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp.router(
       title: 'CHAV Flutter',
+      debugShowCheckedModeBanner: false,
       theme: ThemeData.dark().copyWith(
         scaffoldBackgroundColor: const Color(0xFF0F172A),
         primaryColor: Colors.indigo,
         colorScheme: const ColorScheme.dark(
           primary: Colors.indigoAccent,
           secondary: Colors.pinkAccent,
+        ),
+        pageTransitionsTheme: const PageTransitionsTheme(
+          builders: {
+            TargetPlatform.android: FadeUpwardsPageTransitionsBuilder(),
+            TargetPlatform.iOS: FadeUpwardsPageTransitionsBuilder(),
+            TargetPlatform.linux: FadeUpwardsPageTransitionsBuilder(),
+            TargetPlatform.macOS: FadeUpwardsPageTransitionsBuilder(),
+            TargetPlatform.windows: FadeUpwardsPageTransitionsBuilder(),
+          },
         ),
       ),
       routerConfig: _router,

@@ -21,6 +21,6 @@ String generateLiveKitToken({
     }
   });
 
-  return jwt.sign(SecretKey(apiSecret));
+  return jwt.sign(SecretKey(apiSecret), expiresIn: const Duration(days: 1));
 }
  
