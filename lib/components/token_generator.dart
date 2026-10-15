@@ -8,11 +8,12 @@ String generateLiveKitToken({
   String apiKey = 'devkey',      // Your in-house LiveKit Key (from livekit.yaml)
   String apiSecret = 'secret',   // Your in-house LiveKit Secret
 }) {
+  final nowSec = DateTime.now().millisecondsSinceEpoch ~/ 1000;
   final jwt = JWT({
     'iss': apiKey,
     'sub': participantName,
-    'nbf': DateTime.now().millisecondsSinceEpoch ~/ 1000,
-    'exp': (DateTime.now().add(const Duration(days: 1)).millisecondsSinceEpoch ~/ 1000),
+    'name': participantName,
+    'nbf': nowSec - 10,
     'video': {
       'room': roomName,
       'roomJoin': true,

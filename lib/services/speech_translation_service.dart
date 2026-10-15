@@ -208,19 +208,49 @@ class SpeechTranslationService {
 
   Future<String> translateText(String text, String targetLang) async {
     if (text.trim().isEmpty) return text;
+    if (targetLang.toLowerCase() == 'en') {
+      return text;
+    }
+
+    // 1. Try our Smart Server translation proxy (port 3000)
     try {
-      debugPrint('Translation started for: "$text" to language: "$targetLang"');
-      final url = 'https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=$targetLang&dt=t&q=${Uri.encodeComponent(text)}';
-      final response = await http.get(Uri.parse(url));
+      String host = 'localhost';
+      if (kIsWeb) {
+        final loc = web.window.location.hostname;
+        if (loc.isNotEmpty) {
+          host = loc;
+        }
+      }
+      final serverUrl = 'http://$host:3000/api/translate?text=${Uri.encodeComponent(text)}&target=${Uri.encodeComponent(targetLang)}';
+      final response = await http.get(Uri.parse(serverUrl)).timeout(const Duration(seconds: 4));
       if (response.statusCode == 200) {
-        final jsonResponse = json.decode(response.body);
-        final translated = jsonResponse[0][0][0].toString();
-        debugPrint('Translation completed: "$translated"');
-        return translated;
+        final data = json.decode(response.body);
+        final translated = data['translated']?.toString();
+        if (translated != null && translated.trim().isNotEmpty) {
+          debugPrint('Translation completed via server: "$translated"');
+          return translated;
+        }
       }
     } catch (e) {
-      debugPrint("Translation error: $e");
+      debugPrint("Server translation proxy error: $e");
     }
-    return text; // fallback to original
+
+    // 2. Direct fallback to MyMemory API (with CORS support)
+    try {
+      final mmUrl = 'https://api.mymemory.translated.net/get?q=${Uri.encodeComponent(text)}&langpair=autodetect|${Uri.encodeComponent(targetLang)}';
+      final response = await http.get(Uri.parse(mmUrl)).timeout(const Duration(seconds: 4));
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        final translated = data['responseData']?['translatedText']?.toString();
+        if (translated != null && translated.trim().isNotEmpty) {
+          debugPrint('Translation completed via MyMemory: "$translated"');
+          return translated;
+        }
+      }
+    } catch (e) {
+      debugPrint("MyMemory fallback error: $e");
+    }
+
+    return text;
   }
 }

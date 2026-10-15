@@ -235,7 +235,7 @@ class _VirtualWaitingRoomState extends State<VirtualWaitingRoom> with TickerProv
         path: '/consultation',
         queryParameters: {
           'room': room,
-          'url': LiveKitConfig.serverUrl,
+          'url': _serverUrlController.text.trim().isNotEmpty ? _serverUrlController.text.trim() : LiveKitConfig.serverUrl,
           'token': token,
           'isDoctor': isDoctor ? 'true' : 'false',
           if (_descController.text.isNotEmpty) 'desc': _descController.text,

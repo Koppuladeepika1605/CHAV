@@ -503,11 +503,11 @@ class _ConsultationRoomState extends State<ConsultationRoom> with TickerProvider
       
       if (hasHash) {
         final parts = href.split('#');
-        baseUrl = parts[0] + '#';
+        baseUrl = '${parts[0]}#';
         uri = Uri.parse(parts[1]);
       } else {
         uri = Uri.parse(href);
-        baseUrl = uri.origin;
+        baseUrl = '${uri.origin}/#';
       }
 
       final currentParams = uri.queryParameters;
@@ -516,6 +516,11 @@ class _ConsultationRoomState extends State<ConsultationRoom> with TickerProvider
       final apiSecret = currentParams['apiSecret'] ?? LiveKitConfig.apiSecret;
       
       String livekitUrl = currentParams['url'] ?? LiveKitConfig.serverUrl;
+      final currentHost = html.window.location.hostname;
+      if (currentHost != null && currentHost.isNotEmpty && currentHost != 'localhost' && currentHost != '127.0.0.1') {
+        livekitUrl = 'ws://$currentHost:7880';
+      }
+      
       final ipOverride = _ipOverrideController.text.trim();
       if (ipOverride.isNotEmpty) {
         baseUrl = 'http://$ipOverride:8080/#';
@@ -524,7 +529,7 @@ class _ConsultationRoomState extends State<ConsultationRoom> with TickerProvider
       
       final patientToken = generateLiveKitToken(
         roomName: room,
-        participantName: 'Patient',
+        participantName: 'Patient-${DateTime.now().millisecondsSinceEpoch % 10000}',
         apiKey: apiKey,
         apiSecret: apiSecret,
       );
@@ -1259,7 +1264,40 @@ class _ConsultationRoomState extends State<ConsultationRoom> with TickerProvider
                       );
                     }
 
-                    // When no remote participant is connected, show the centered Invitation Card matching the screenshot!
+                    if (!MeetingController().isDoctor) {
+                      return Center(
+                        child: Container(
+                          padding: const EdgeInsets.all(28),
+                          margin: const EdgeInsets.symmetric(horizontal: 24),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF111A2C),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(color: const Color(0xFF1E2D4A)),
+                            boxShadow: const [
+                              BoxShadow(color: Colors.black45, blurRadius: 24, offset: Offset(0, 8)),
+                            ],
+                          ),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: const [
+                              CircularProgressIndicator(color: Color(0xFF2563EB)),
+                              SizedBox(height: 20),
+                              Text(
+                                'Connected as Patient',
+                                style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+                              ),
+                              SizedBox(height: 8),
+                              Text(
+                                'You are in the room. Waiting for Doctor to connect...',
+                                style: TextStyle(color: Colors.white60, fontSize: 13),
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    }
+
+                    // When no remote participant is connected and current user is Doctor, show the centered Invitation Card
                     return _buildInvitationCard();
                   }
                 ),

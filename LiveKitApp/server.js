@@ -8,9 +8,61 @@ const PORT = 3000;
 const apiKey = 'devkey';
 const apiSecret = 'secret';
 
+// Enable CORS for Flutter Web client
+app.use((req, res, next) => {
+    res.header('Access-Control-Allow-Origin', '*');
+    res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    if (req.method === 'OPTIONS') return res.sendStatus(200);
+    next();
+});
+
 // Serve the index.html file
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'index.html'));
+});
+
+// TRANSLATION ENDPOINT: Proxies Google Translate & MyMemory to bypass browser CORS
+app.get('/api/translate', async (req, res) => {
+    const text = req.query.text;
+    const target = req.query.target || 'en';
+    if (!text || !text.trim()) {
+        return res.json({ translated: '' });
+    }
+    try {
+        const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=${encodeURIComponent(target)}&dt=t&q=${encodeURIComponent(text)}`;
+        const gResp = await fetch(url, {
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+            }
+        });
+        if (gResp.ok) {
+            const data = await gResp.json();
+            const translated = data?.[0]?.[0]?.[0];
+            if (translated) {
+                return res.json({ translated });
+            }
+        }
+    } catch (e) {
+        console.error('Google Translate error:', e.message);
+    }
+
+    // Fallback: MyMemory API
+    try {
+        const mmUrl = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=autodetect|${encodeURIComponent(target)}`;
+        const mResp = await fetch(mmUrl);
+        if (mResp.ok) {
+            const mData = await mResp.json();
+            const translated = mData?.responseData?.translatedText;
+            if (translated) {
+                return res.json({ translated });
+            }
+        }
+    } catch (e) {
+        console.error('MyMemory error:', e.message);
+    }
+
+    return res.json({ translated: text });
 });
 
 // GET TOKEN ENDPOINT: Called by the Flutter client to obtain a LiveKit token

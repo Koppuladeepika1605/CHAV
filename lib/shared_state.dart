@@ -298,6 +298,7 @@ class MeetingController extends ChangeNotifier {
   void setCaptionLanguage(String lang) {
     selectedCaptionLanguage = lang;
     notifyListeners();
+    forceTranslate();
   }
 
   Future<void> forceTranslate() async {
@@ -626,7 +627,13 @@ class MeetingController extends ChangeNotifier {
   }
 
   Future<void> connectWithToken(String url, String token, {String? roomName}) async {
-    if (isConnected || isConnecting) return;
+    if (isConnected || isConnecting) {
+      if (room != null && currentRoomName == roomName && isConnected) {
+        return;
+      }
+      debugPrint("[CHAV-LIVEKIT] Cleaning up prior connection to join '$roomName'...");
+      await disconnect();
+    }
 
     if (roomName != null && roomName.isNotEmpty) {
       currentRoomName = roomName;
@@ -637,9 +644,10 @@ class MeetingController extends ChangeNotifier {
     }
 
     if (token.trim().isEmpty) {
+      final suffix = isDoctor ? '' : '-${DateTime.now().millisecondsSinceEpoch % 10000}';
       token = generateLiveKitToken(
         roomName: currentRoomName ?? 'my-consultation-room',
-        participantName: isDoctor ? 'Doctor' : 'Patient',
+        participantName: isDoctor ? 'Doctor' : 'Patient$suffix',
         apiKey: LiveKitConfig.apiKey,
         apiSecret: LiveKitConfig.apiSecret,
       );
@@ -1370,7 +1378,7 @@ class MeetingController extends ChangeNotifier {
   }
 
   Future<void> disconnect() async {
-    if (!isConnected) return;
+    if (!isConnected && !isConnecting && room == null) return;
     
     try {
       SpeechTranslationService().stopListening();
