@@ -96,31 +96,43 @@ class MeetingController extends ChangeNotifier {
   LocalVideoTrack? localVideoTrack;
   LocalAudioTrack? localAudioTrack;
 
+  bool _isCreatingCameraTrack = false;
   Future<void> ensureLocalVideoTrack() async {
-    if (localVideoTrack == null) {
-      try {
-        if (room?.localParticipant != null) {
-          final pubs = room!.localParticipant!.videoTrackPublications;
-          if (pubs.isNotEmpty && pubs.first.track != null) {
-            localVideoTrack = pubs.first.track;
-          } else {
-            await room!.localParticipant!.setCameraEnabled(true);
-            final updatedPubs = room!.localParticipant!.videoTrackPublications;
-            if (updatedPubs.isNotEmpty) {
-              localVideoTrack = updatedPubs.first.track;
-            }
-          }
+    if (_isCreatingCameraTrack) return;
+    if (localVideoTrack != null && isVideoOn) return;
+
+    _isCreatingCameraTrack = true;
+    try {
+      if (room?.localParticipant != null) {
+        final pubs = room!.localParticipant!.videoTrackPublications;
+        if (pubs.isNotEmpty && pubs.first.track != null) {
+          localVideoTrack = pubs.first.track;
+          await localVideoTrack?.unmute();
+          cameraError = null;
         } else {
-          localVideoTrack = await LocalVideoTrack.createCameraTrack();
+          cameraError = null;
+          await room!.localParticipant!.setCameraEnabled(true);
+          final updatedPubs = room!.localParticipant!.videoTrackPublications;
+          if (updatedPubs.isNotEmpty) {
+            localVideoTrack = updatedPubs.first.track;
+            await localVideoTrack?.unmute();
+            cameraError = null;
+          }
         }
-        isVideoOn = true;
+      } else {
         cameraError = null;
-        notifyListeners();
-      } catch (e) {
-        cameraError = e.toString();
-        debugPrint("Failed to create camera track: $e");
-        notifyListeners();
+        localVideoTrack = await LocalVideoTrack.createCameraTrack();
+        cameraError = null;
       }
+      isVideoOn = true;
+      cameraError = null;
+      notifyListeners();
+    } catch (e) {
+      cameraError = e.toString();
+      debugPrint("Failed to create camera track: $e");
+      notifyListeners();
+    } finally {
+      _isCreatingCameraTrack = false;
     }
   }
 
@@ -1303,17 +1315,37 @@ class MeetingController extends ChangeNotifier {
 
     try {
       if (room?.localParticipant != null) {
-        await room!.localParticipant!.setCameraEnabled(isVideoOn);
+        if (isVideoOn) {
+          cameraError = null;
+          await room!.localParticipant!.setCameraEnabled(true);
+          final pubs = room!.localParticipant!.videoTrackPublications;
+          if (pubs.isNotEmpty) {
+            localVideoTrack = pubs.first.track;
+            await localVideoTrack?.unmute();
+          }
+          cameraError = null;
+        } else {
+          await room!.localParticipant!.setCameraEnabled(false);
+          localVideoTrack = null;
+        }
       } else {
         if (!isVideoOn) {
           await localVideoTrack?.mute();
+          await localVideoTrack?.stop();
+          localVideoTrack?.dispose();
+          localVideoTrack = null;
         } else {
+          cameraError = null;
           localVideoTrack?.dispose();
           localVideoTrack = await LocalVideoTrack.createCameraTrack();
+          cameraError = null;
         }
       }
+      notifyListeners();
     } catch (e) {
+      cameraError = e.toString();
       debugPrint("Toggle video error: $e");
+      notifyListeners();
     }
   }
 

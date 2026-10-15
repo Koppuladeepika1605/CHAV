@@ -119,7 +119,6 @@ class _ConsultationRoomState extends State<ConsultationRoom> with TickerProvider
       final token = generateLiveKitToken(roomName: roomToConnect, participantName: MeetingController().isDoctor ? 'Doctor' : 'Patient');
       MeetingController().connectWithToken(widget.url ?? 'ws://127.0.0.1:7880', token, roomName: roomToConnect);
     }
-    MeetingController().ensureLocalVideoTrack();
   }
 
 
@@ -1354,14 +1353,41 @@ class _ConsultationRoomState extends State<ConsultationRoom> with TickerProvider
                                       child: Center(
                                         child: Padding(
                                           padding: const EdgeInsets.symmetric(horizontal: 8.0),
-                                          child: Text(
-                                            MeetingController().cameraError != null
-                                                ? 'Camera Error:\n${MeetingController().cameraError}'
-                                                : (MeetingController().isVideoOn
-                                                    ? 'Camera Initializing...'
-                                                    : 'Camera Off'),
-                                            textAlign: TextAlign.center,
-                                            style: TextStyle(color: Colors.white54, fontSize: widget.isPip ? 9 : 11),
+                                          child: Column(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Text(
+                                                MeetingController().cameraError != null
+                                                    ? 'Camera Busy or In Use\n(Close other apps using camera)'
+                                                    : (MeetingController().isVideoOn
+                                                        ? 'Camera Initializing...'
+                                                        : 'Camera Off'),
+                                                textAlign: TextAlign.center,
+                                                style: TextStyle(color: Colors.white70, fontSize: widget.isPip ? 9 : 11),
+                                              ),
+                                              const SizedBox(height: 6),
+                                              InkWell(
+                                                onTap: () {
+                                                  MeetingController().ensureLocalVideoTrack();
+                                                },
+                                                borderRadius: BorderRadius.circular(4),
+                                                child: Container(
+                                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                                  decoration: BoxDecoration(
+                                                    color: const Color(0xFF2563EB),
+                                                    borderRadius: BorderRadius.circular(4),
+                                                  ),
+                                                  child: const Row(
+                                                    mainAxisSize: MainAxisSize.min,
+                                                    children: [
+                                                      Icon(Icons.videocam, size: 11, color: Colors.white),
+                                                      SizedBox(width: 4),
+                                                      Text('Turn On Camera', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+                                                    ],
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
                                           ),
                                         ),
                                       ),
